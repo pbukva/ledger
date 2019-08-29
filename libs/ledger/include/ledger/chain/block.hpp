@@ -44,6 +44,7 @@ public:
   using Slice    = std::vector<TransactionLayout>;
   using Slices   = std::vector<Slice>;
   using DAGEpoch = fetch::ledger::DAGEpoch;
+  using Hash     = Digest;
 
   struct Body
   {

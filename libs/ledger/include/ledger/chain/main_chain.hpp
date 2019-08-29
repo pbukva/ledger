@@ -23,6 +23,7 @@
 #include "core/mutex.hpp"
 #include "crypto/fnv.hpp"
 #include "ledger/chain/block.hpp"
+#include "ledger/chain/block_db_record.hpp"
 #include "ledger/chain/consensus/proof_of_work.hpp"
 #include "ledger/chain/constants.hpp"
 #include "ledger/chain/digest.hpp"
@@ -98,7 +99,7 @@ class MainChain
 public:
   using BlockPtr             = std::shared_ptr<Block const>;
   using Blocks               = std::vector<BlockPtr>;
-  using BlockHash            = Digest;
+  using BlockHash            = Block::Hash;
   using BlockHashes          = std::vector<BlockHash>;
   using BlockHashSet         = std::unordered_set<BlockHash>;
   using TransactionLayoutSet = std::unordered_set<TransactionLayout>;
@@ -172,18 +173,7 @@ public:
   MainChain &operator=(MainChain &&rhs) = delete;
 
 private:
-  struct DbRecord
-  {
-    Block block;
-    // genesis (hopefully) cannot be next hash so is used as undefined value
-    BlockHash next_hash = GENESIS_DIGEST;
-
-    BlockHash hash() const
-    {
-      return block.body.hash;
-    }
-  };
-
+  using DbRecord = BlockDbRecord;
   using IntBlockPtr   = std::shared_ptr<Block>;
   using BlockMap      = std::unordered_map<BlockHash, IntBlockPtr>;
   using References    = std::unordered_multimap<BlockHash, BlockHash>;
@@ -267,31 +257,7 @@ private:
   telemetry::CounterPtr             bloom_filter_positive_count_;
   telemetry::CounterPtr             bloom_filter_false_positive_count_;
 
-  /**
-   * Serializer for the DbRecord
-   *
-   * @tparam T The serializer type
-   * @param serializer The reference to hte serializer
-   * @param dbRecord The reference to the DbRecord to be serialised
-   */
-  template <typename T>
-  friend void Serialize(T &serializer, DbRecord const &dbRecord)
-  {
-    serializer << dbRecord.block << dbRecord.next_hash;
-  }
 
-  /**
-   * Deserializer for the DbRecord
-   *
-   * @tparam T The serializer type
-   * @param serializer The reference to the serializer
-   * @param dbRecord The reference to the output dbRecord to be populated
-   */
-  template <typename T>
-  friend void Deserialize(T &serializer, DbRecord &dbRecord)
-  {
-    serializer >> dbRecord.block >> dbRecord.next_hash;
-  }
 };
 
 }  // namespace ledger
