@@ -19,6 +19,8 @@
 #include "core/commandline/params.hpp"
 #include "ledger/chain/block_db_record.hpp"
 #include "ledger/chain/transaction.hpp"
+#include "ledger/chain/transaction_layout.hpp"
+#include "ledger/chain/transaction_rpc_serializers.hpp"
 #include "meta/log2.hpp"
 
 #include "storage/object_store.hpp"
@@ -52,7 +54,7 @@ struct DIRDeleter
   }
 };
 
-Block::Hash GetHeadHash()
+ledger::Block::Hash GetHeadHash()
 {
   std::fstream  head_store;
   head_store.open("chain.head.db",
@@ -61,7 +63,7 @@ Block::Hash GetHeadHash()
   byte_array::ByteArray buffer;
 
   // determine is the hash has already been stored once
-  head_store_.seekg(0, std::ios::end);
+  head_store.seekg(0, std::ios::end);
   auto const file_size = head_store.tellg();
 
   if (file_size == 32)
@@ -74,7 +76,7 @@ Block::Hash GetHeadHash()
                      static_cast<std::streamsize>(buffer.size()));
   }
 
-  return buffer;
+  return std::move(buffer);
 }
 
 int main(int argc, char **argv)
@@ -82,13 +84,10 @@ int main(int argc, char **argv)
   std::string dir{};
   TxStores    tx_stores;
 
-  // build the parser
   commandline::Params parser{};
   parser.description(
     "Tool for consistency check & analysis of fetch block-chain & transaction storage files.");
   parser.add(dir, "directory", "Directory where data-files are located", std::string{"."});
-
-  // parse the command line
   parser.Parse(argc, argv);
 
   DIRPtr dp{opendir(dir.c_str())};
@@ -158,24 +157,108 @@ int main(int argc, char **argv)
 
   std::cout << "Blocks count: " << block_store.size() << std::endl;
 
+  uint64_t count_of_all_tx_in_db{0};
   for (auto const &tx_lane_store : tx_stores)
   {
+    count_of_all_tx_in_db += tx_lane_store.second.size();
     std::cout << "Lane" << tx_lane_store.first << ": Tx Count: " << tx_lane_store.second.size()
               << std::endl;
   }
 
-  auto const blockchain_head_hash{GetHeadHash()};
-  auto       block_hash{blockchain_head_hash};
+  auto block_hash{GetHeadHash()};
   ledger::BlockDbRecord block;
-  //for (;;)
-  //{
-    if (!block_store.Get(block_head, block))
+  uint64_t reference_block_index{0};
+  uint64_t tx_count_in_blockchain{0};
+  uint64_t tx_count_missing{0};
+
+  do
+  {
+    if (!block_store.Get(storage::ResourceID{block_hash}, block))
     {
       std::cerr << "ERROR: Unable to fetch " << block_hash.ToHex() << " block" << std::endl;
       return -4;
     }
-  //};
 
+    if (block.block.body.hash != block_hash)
+    {
+      std::cerr << "INCONSISTENCY: Block hash " << block.block.body.hash.ToHex()
+                << " does not match the hash " << block_hash.ToHex()
+                << " used to fetch block from db."
+                << std::endl;
+    }
+
+    //if (block.block.body.block_number != reference_block_index)
+    //{
+    //  std::cerr << "INCONSISTENCY: Block number " << block.block.body.block_number
+    //            << " does not match the expected reference block number " << reference_block_index
+    //            << std::endl;
+    //}
+
+    block_hash = block.block.body.previous_hash;
+    ++reference_block_index;
+
+    std::cout << "INFO: Checking block[" << block.block.body.block_number
+              << "] " << block.block.body.hash.ToHex()
+              << std::endl;
+    std::cerr.flush();
+    std::cout.flush();
+
+    uint64_t slice_idx{0};
+    for (auto const &slice : block.block.body.slices)
+    {
+      tx_count_in_blockchain += slice.size();
+
+      uint64_t tx_idx_in_slice{0};
+      for (auto const &tx_layout : slice)
+      {
+        ledger::Transaction tx;
+
+        bool res{false};
+
+        try
+        {
+          res = tx_stores[0].Get(storage::ResourceID{tx_layout.digest()}, tx);
+        }
+        catch(...)
+        {
+          std::cerr << "EXCEPTION: Tx fetch from db failed:"
+                    << " tx hash = " << tx_layout.digest().ToHex()
+                    << std::endl;
+          std::cerr.flush();
+        }
+
+        if (!res)
+        {
+          ++tx_count_missing;
+          std::cerr << "INCONSISTENCY: Tx fetch from db failed: block[" << block.block.body.block_number
+                    << "] " << block.block.body.hash.ToHex()
+                    << ", slice = " << slice_idx
+                    << ", tx index in slice = " << tx_idx_in_slice
+                    << ", tx hash = " << tx_layout.digest().ToHex()
+                    << std::endl;
+          std::cerr.flush();
+        }
+
+        ++tx_idx_in_slice;
+      }
+      ++slice_idx;
+    }
+  } while (block_hash != ledger::GENESIS_DIGEST);
+
+  if (tx_count_in_blockchain > count_of_all_tx_in_db)
+  {
+    std::cerr << "INCONSISTENCY: Less transactions present in db store " << count_of_all_tx_in_db
+              << " than transactions required by blockchain " << tx_count_in_blockchain
+              << std::endl;
+  }
+
+  if (tx_count_missing > 0)
+  {
+    std::cerr << "INCONSISTENCY: " << tx_count_missing
+              << " transactions required by blockchain are missing in tx db store"
+              << std::endl;
+  }
+
+  std::cout << "Counted blocks: " << reference_block_index << std::endl;
   return EXIT_SUCCESS;
 }
-
