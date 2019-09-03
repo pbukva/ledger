@@ -42,6 +42,7 @@ using TxStore       = ObjectStore<ledger::Transaction>;
 using TxStores      = std::unordered_map<LaneIdx, TxStore>;
 using BlockStorePtr = std::unique_ptr<BlockStore>;
 using DIRPtr        = std::unique_ptr<DIR, DIRDeleter>;
+using BlockChain    = std::vector<ledger::BlockDbRecord>;
 
 struct DIRDeleter
 {
@@ -58,7 +59,7 @@ ledger::Block::Hash GetHeadHash()
 {
   std::fstream  head_store;
   head_store.open("chain.head.db",
-                  std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+                  std::ios::binary | std::ios::in);
 
   byte_array::ByteArray buffer;
 
@@ -166,42 +167,118 @@ int main(int argc, char **argv)
   }
 
   auto block_hash{GetHeadHash()};
-  ledger::BlockDbRecord block;
-  uint64_t reference_block_index{0};
+  //ledger::BlockDbRecord block;
   uint64_t tx_count_in_blockchain{0};
   uint64_t tx_count_missing{0};
 
+  BlockChain blockchain{block_store.size()};
+  uint64_t reference_head_block_index{blockchain.size()-1};
+  uint64_t block_index{reference_head_block_index};
+  uint64_t transaction_count_required_by_blockchain{0};
+
+  bool first_block{true};
+  bool is_genesis{false};
   do
   {
-    if (!block_store.Get(storage::ResourceID{block_hash}, block))
+    auto *block{& blockchain[block_index]};
+    if (!block_store.Get(storage::ResourceID{block_hash}, *block))
     {
       std::cerr << "ERROR: Unable to fetch " << block_hash.ToHex() << " block" << std::endl;
       return -4;
     }
 
-    if (block.block.body.hash != block_hash)
+    if (block->block.body.hash != block_hash)
     {
-      std::cerr << "INCONSISTENCY: Block hash " << block.block.body.hash.ToHex()
+      std::cerr << "INCONSISTENCY: Block hash " << block->block.body.hash.ToHex()
                 << " does not match the hash " << block_hash.ToHex()
                 << " used to fetch block from db."
                 << std::endl;
     }
 
-    //if (block.block.body.block_number != reference_block_index)
-    //{
-    //  std::cerr << "INCONSISTENCY: Block number " << block.block.body.block_number
-    //            << " does not match the expected reference block number " << reference_block_index
-    //            << std::endl;
-    //}
+    if (block->block.body.block_number != block_index)
+    {
+      std::cerr << "INCONSISTENCY: Block number in block body " << block->block.body.block_number
+                << " does not match the expected block number " << block_index
+                << std::endl;
 
-    block_hash = block.block.body.previous_hash;
-    ++reference_block_index;
+      if (first_block)
+      {
+        std::cerr << "REPAIR-ATTEMPT: Resetting block index " << block_index
+                  << " to block number from block body " << block->block.body.block_number
+                  << std::endl;
+        if (block->block.body.block_number < block_index)
+        {
+          blockchain[block->block.body.block_number] = std::move(blockchain[block_index]);
+          blockchain.resize(block->block.body.block_number + 1);
+        }
+        else
+        {
+          blockchain.resize(block->block.body.block_number + 1);
+          blockchain[block->block.body.block_number] = std::move(blockchain[block_index]);
+        }
+        reference_head_block_index = block->block.body.block_number;
+        block_index = reference_head_block_index;
+        block = & blockchain[block_index];
+      }
+      else
+      {
+        std::cerr << "ERROR: Unable to recover. Exiting." << std::endl;
+        return -5;
+      }
+    }
 
-    std::cout << "INFO: Checking block[" << block.block.body.block_number
-              << "] " << block.block.body.hash.ToHex()
+    block_hash = block->block.body.previous_hash;
+    is_genesis = block_hash == ledger::GENESIS_DIGEST;
+
+    if (block_index > 0)
+    {
+      if (is_genesis)
+      {
+        std::cerr << "INCONSISTENCY: Block index hasn't reached zero but "
+                     "parent block is Genesis block."
+                  << std::endl;
+        break;
+      }
+      --block_index;
+    }
+    else if (!is_genesis)
+    {
+      std::cerr << "INCONSISTENCY: Block index reached zero but "
+                   "parent block is *NOT* Genesis block."
+                << std::endl;
+      break;
+    }
+
+    for (auto const &slice : block->block.body.slices)
+    {
+      transaction_count_required_by_blockchain += slice.size();
+    }
+
+    std::cout << "INFO: Fetched block[" << block->block.body.block_number
+              << "] " << block->block.body.hash.ToHex()
               << std::endl;
     std::cerr.flush();
     std::cout.flush();
+    first_block = false;
+  } while (!is_genesis);
+
+  std::cout << "Fetched " << (blockchain.size() - block_index) << " blocks." << std::endl;
+  std::cout << "Number of transactions required by blockchain " << transaction_count_required_by_blockchain << std::endl;
+  if (transaction_count_required_by_blockchain > count_of_all_tx_in_db)
+  {
+    std::cerr << "INCONSISTENCY: Number of transactions required by blockchain "
+              << transaction_count_required_by_blockchain
+              << " is bigger than number of *all* transactions in db storage ("
+              << count_of_all_tx_in_db
+              << ")."
+              << std::endl;
+  }
+
+  for (auto &block : blockchain)
+  {
+    std::cout << "INFO: Checking Transactions from block[" << block.block.body.block_number
+              << "] " << block.block.body.hash.ToHex()
+              << std::endl;
 
     uint64_t slice_idx{0};
     for (auto const &slice : block.block.body.slices)
@@ -214,7 +291,6 @@ int main(int argc, char **argv)
         ledger::Transaction tx;
 
         bool res{false};
-
         try
         {
           res = tx_stores[0].Get(storage::ResourceID{tx_layout.digest()}, tx);
@@ -238,12 +314,11 @@ int main(int argc, char **argv)
                     << std::endl;
           std::cerr.flush();
         }
-
         ++tx_idx_in_slice;
       }
       ++slice_idx;
     }
-  } while (block_hash != ledger::GENESIS_DIGEST);
+  }
 
   if (tx_count_in_blockchain > count_of_all_tx_in_db)
   {
@@ -258,7 +333,5 @@ int main(int argc, char **argv)
               << " transactions required by blockchain are missing in tx db store"
               << std::endl;
   }
-
-  std::cout << "Counted blocks: " << reference_block_index << std::endl;
   return EXIT_SUCCESS;
 }
