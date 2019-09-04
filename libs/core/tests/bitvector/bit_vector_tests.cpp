@@ -392,3 +392,19 @@ TEST(BitVectorTests, ContractFrom32)
   EXPECT_EQ(smaller.bit(6), 1);
   EXPECT_EQ(smaller.bit(7), 1);
 }
+
+TEST(BitVectorTests, IterateSetBits)
+{
+  BitVector src{256};
+  src.set(0, 1);
+  src.set(80, 1);
+  src.set(127, 1);
+  src.set(196, 1);
+
+  auto const end{src.end()};
+  for (auto itr{src.begin()}; itr != end; ++itr)
+  {
+    std::cout << "index: " << *itr << std::endl;
+  }
+}
+

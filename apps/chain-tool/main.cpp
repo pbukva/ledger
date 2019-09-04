@@ -288,6 +288,8 @@ int main(int argc, char **argv)
       uint64_t tx_idx_in_slice{0};
       for (auto const &tx_layout : slice)
       {
+        auto const &tx_mask{tx_layout.mask()};
+
         ledger::Transaction tx;
 
         bool res{false};

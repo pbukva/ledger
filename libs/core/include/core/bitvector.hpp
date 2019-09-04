@@ -42,6 +42,25 @@ public:
     SIMD_SIZE        = UnderlyingArray::E_SIMD_COUNT
   };
 
+  class Iterator : public std::iterator<std::output_iterator_tag, std::size_t>
+  {
+    BitVector const &container_;
+    value_type end_;
+    value_type index_;
+    bool       is_begin_{false};
+
+  public:
+    explicit Iterator(BitVector const &container, bool const is_begin = false);
+    bool operator == (Iterator const &right) const;
+    bool operator != (Iterator const &right) const;
+    value_type operator*() const;
+    Iterator & operator++();
+    Iterator operator++(int);
+
+  private:
+    BitVector::Iterator & Next();
+ };
+
   // Construction  / Destruction
   explicit BitVector(std::size_t n = 0);
   BitVector(BitVector const &other);
@@ -92,6 +111,9 @@ public:
   BitVector operator^(BitVector const &other) const;
   BitVector operator&(BitVector const &other) const;
   BitVector operator|(BitVector const &other) const;
+
+  Iterator begin() const;
+  Iterator end() const;
 
 private:
   UnderlyingArray data_{};
