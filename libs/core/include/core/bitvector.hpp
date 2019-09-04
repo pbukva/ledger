@@ -47,7 +47,6 @@ public:
     BitVector const &container_;
     value_type end_;
     value_type index_;
-    bool       is_begin_{false};
 
   public:
     explicit Iterator(BitVector const &container, bool const is_begin = false);
@@ -58,7 +57,7 @@ public:
     Iterator operator++(int);
 
   private:
-    BitVector::Iterator & Next();
+    BitVector::Iterator & Next(bool is_begin = false);
  };
 
   // Construction  / Destruction

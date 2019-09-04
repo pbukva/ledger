@@ -431,17 +431,16 @@ BitVector::Iterator::Iterator(BitVector const &container, bool const is_begin)
   : container_{container}
   , end_{container.size()}
   , index_{end_}
-  , is_begin_{is_begin}
 {
-  if (is_begin_)
+  if (is_begin)
   {
-    Next();
+    Next(is_begin);
   }
 }
 
 bool BitVector::Iterator::operator == (Iterator const &right) const
 {
-  return is_begin_ == right.is_begin_ && index_ == right.index_ && &container_ == &right.container_;
+  return index_ == right.index_ && &container_ == &right.container_;
 }
 
 bool BitVector::Iterator::operator != (Iterator const &right) const
@@ -466,9 +465,9 @@ BitVector::Iterator BitVector::Iterator::operator++(int)
   return retval;
 }
 
-BitVector::Iterator & BitVector::Iterator::Next()
+BitVector::Iterator & BitVector::Iterator::Next(bool is_begin)
 {
-  if (!is_begin_ && index_ >= end_)
+  if (!is_begin && index_ >= end_)
   {
     return *this;
   }
@@ -476,20 +475,20 @@ BitVector::Iterator & BitVector::Iterator::Next()
   auto const &data{container_.data()};
   auto const  blocks_count{container_.blocks()};
 
-  if (is_begin_)
+  if (is_begin)
   {
     index_ = 0;
   }
 
   std::size_t bit_idx{index_ & BitVector::BIT_MASK};
-  std::size_t bit_shift{is_begin_ ? 0 : bit_idx + 1};
+  std::size_t bit_shift{is_begin ? 0 : bit_idx + 1};
 
   for (std::size_t blck_idx{index_ >> BitVector::LOG_BITS}; blck_idx < blocks_count; ++blck_idx)
   {
     BitVector::Block const x{data[blck_idx] >> bit_shift};
     std::size_t const trailing_zeroes = x > 0 ? platform::CountTrailingZeroes64(x) : BitVector::ELEMENT_BIT_SIZE - bit_shift;
-    index_ += is_begin_ ? trailing_zeroes : trailing_zeroes + 1;
-    is_begin_ = false;
+    index_ += is_begin ? trailing_zeroes : trailing_zeroes + 1;
+    is_begin = false;
 
     if (BitVector::ELEMENT_BIT_SIZE > (bit_shift + trailing_zeroes))
     {
