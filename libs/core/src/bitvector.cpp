@@ -475,29 +475,28 @@ BitVector::Iterator & BitVector::Iterator::Next(bool is_begin)
   auto const &data{container_.data()};
   auto const  blocks_count{container_.blocks()};
 
-  BitVector::Block shift_value{1ull};
+  BitVector::Block shift_mask{~1ull};
 
   if (is_begin)
   {
-    index_ = 0;
-    shift_value = 0ull;
+    index_     = 0;
+    shift_mask = ~0ull;
   }
 
   for (std::size_t blck_idx{index_ >> BitVector::LOG_BITS}; blck_idx < blocks_count; ++blck_idx)
   {
     std::size_t bit_idx{index_ & BitVector::BIT_MASK};
-    BitVector::Block mask{(~static_cast<BitVector::Block>(shift_value) << bit_idx)};
+    BitVector::Block mask{(shift_mask << bit_idx)};
     BitVector::Block const x{data[blck_idx] & mask};
-    std::size_t const trailing_zeroes = (x > 0 ? platform::CountTrailingZeroes64(x) : static_cast<std::size_t>(BitVector::ELEMENT_BIT_SIZE)) - bit_idx;
+    std::size_t const trailing_zeroes = platform::CountTrailingZeroes64(x) - bit_idx;
     index_ += trailing_zeroes;
-    //is_begin = false;
 
     if (BitVector::ELEMENT_BIT_SIZE > (bit_idx + trailing_zeroes))
     {
       break;
     }
 
-    shift_value = 0ull;
+    shift_mask = ~0ull;
   }
 
   return *this;
