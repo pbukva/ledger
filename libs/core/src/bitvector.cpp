@@ -488,7 +488,7 @@ BitVector::Iterator & BitVector::Iterator::Next(bool is_begin)
     std::size_t bit_idx{index_ & BitVector::BIT_MASK};
     BitVector::Block mask{(shift_mask << bit_idx)};
     BitVector::Block const x{data[blck_idx] & mask};
-    std::size_t const trailing_zeroes = platform::CountTrailingZeroes64(x) - bit_idx;
+    std::size_t const trailing_zeroes {platform::CountTrailingZeroes64(x) - bit_idx};
     index_ += trailing_zeroes;
 
     if (BitVector::ELEMENT_BIT_SIZE > (bit_idx + trailing_zeroes))
