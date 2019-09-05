@@ -169,7 +169,7 @@ int main(int argc, char **argv)
   auto block_hash{GetHeadHash()};
   //ledger::BlockDbRecord block;
   uint64_t tx_count_in_blockchain{0};
-  uint64_t tx_count_missing{0};
+  std::vector<uint64_t> tx_count_missing(tx_stores.size(), 0ull);
 
   BlockChain blockchain{block_store.size()};
   uint64_t reference_head_block_index{blockchain.size()-1};
@@ -178,6 +178,10 @@ int main(int argc, char **argv)
 
   bool first_block{true};
   bool is_genesis{false};
+
+  std::cout << "Reading blockchain from db ... " << std::endl;
+  std::size_t progress_step{reference_head_block_index / 10ull};
+  std::size_t i{0};
   do
   {
     auto *block{& blockchain[block_index]};
@@ -217,6 +221,7 @@ int main(int argc, char **argv)
           blockchain[block->block.body.block_number] = std::move(blockchain[block_index]);
         }
         reference_head_block_index = block->block.body.block_number;
+        progress_step = reference_head_block_index / 10ull;
         block_index = reference_head_block_index;
         block = & blockchain[block_index];
       }
@@ -254,12 +259,15 @@ int main(int argc, char **argv)
       transaction_count_required_by_blockchain += slice.size();
     }
 
-    std::cout << "INFO: Fetched block[" << block->block.body.block_number
-              << "] " << block->block.body.hash.ToHex()
-              << std::endl;
+    if (0 == i % progress_step)
+    {
+      std::cout << i * 10ull / progress_step << "%" <<  std::endl;
+    }
+
     std::cerr.flush();
     std::cout.flush();
     first_block = false;
+    ++i;
   } while (!is_genesis);
 
   std::cout << "Fetched " << (blockchain.size() - block_index) << " blocks." << std::endl;
@@ -274,12 +282,10 @@ int main(int argc, char **argv)
               << std::endl;
   }
 
+  std::cout << "INFO: Checking Transactions from all blocks ... " << std::endl;
+  progress_step = blockchain.size() / 10ull;
   for (auto &block : blockchain)
   {
-    std::cout << "INFO: Checking Transactions from block[" << block.block.body.block_number
-              << "] " << block.block.body.hash.ToHex()
-              << std::endl;
-
     uint64_t slice_idx{0};
     for (auto const &slice : block.block.body.slices)
     {
@@ -288,39 +294,70 @@ int main(int argc, char **argv)
       uint64_t tx_idx_in_slice{0};
       for (auto const &tx_layout : slice)
       {
-        auto const &tx_mask{tx_layout.mask()};
-
-        ledger::Transaction tx;
-
-        bool res{false};
-        try
+        BitVector tx_mask{tx_stores.size()};
+        if (!tx_layout.mask().RemapTo(tx_mask))
         {
-          res = tx_stores[0].Get(storage::ResourceID{tx_layout.digest()}, tx);
-        }
-        catch(...)
-        {
-          std::cerr << "EXCEPTION: Tx fetch from db failed:"
-                    << " tx hash = " << tx_layout.digest().ToHex()
-                    << std::endl;
-          std::cerr.flush();
-        }
-
-        if (!res)
-        {
-          ++tx_count_missing;
-          std::cerr << "INCONSISTENCY: Tx fetch from db failed: block[" << block.block.body.block_number
+          std::cerr << "INCONSISTENCY: Remapping of transaction mask ("
+                    << tx_layout.mask() << ") "
+                    << "to required mask (size=" << tx_mask.size() << ") failed."
+                    << std::endl
+                    << "Block[" << block.block.body.block_number
                     << "] " << block.block.body.hash.ToHex()
                     << ", slice = " << slice_idx
                     << ", tx index in slice = " << tx_idx_in_slice
                     << ", tx hash = " << tx_layout.digest().ToHex()
+                    << std::endl
+                    << "Fallback: setting mask to lane 0."
                     << std::endl;
-          std::cerr.flush();
+          tx_mask.set(0ull, 1ull);
         }
+
+        auto const end{tx_mask.end()};
+        for (auto lane_it{tx_mask.begin()}; lane_it != end; ++lane_it)
+        {
+          ledger::Transaction tx;
+
+          bool res{false};
+          try
+          {
+            res = tx_stores[*lane_it].Get(storage::ResourceID{tx_layout.digest()}, tx);
+          }
+          catch (...)
+          {
+            std::cerr << "EXCEPTION: Tx fetch from db failed:"
+                      << " lane = " << *lane_it
+                      << ", tx hash = " << tx_layout.digest().ToHex()
+                      << std::endl;
+            std::cerr.flush();
+          }
+
+          if (!res)
+          {
+            ++(tx_count_missing[*lane_it]);
+            std::cerr << "INCONSISTENCY: Tx fetch from db failed:"
+                      << " lane = " << *lane_it
+                      << ", block[" << block.block.body.block_number
+                      << "] " << block.block.body.hash.ToHex()
+                      << ", slice = " << slice_idx
+                      << ", tx index in slice = " << tx_idx_in_slice
+                      << ", tx hash = " << tx_layout.digest().ToHex()
+                      << std::endl;
+            std::cerr.flush();
+          }
+        }
+
         ++tx_idx_in_slice;
       }
       ++slice_idx;
     }
+
+    if (0 == block.block.body.block_number % progress_step)
+    {
+      std::cout << block.block.body.block_number * 10ull / progress_step << "%" << std::endl;
+    }
   }
+
+  std::cout << "done." << std::endl;
 
   if (tx_count_in_blockchain > count_of_all_tx_in_db)
   {
@@ -329,11 +366,18 @@ int main(int argc, char **argv)
               << std::endl;
   }
 
-  if (tx_count_missing > 0)
+  std::size_t lane{0};
+  for (auto const& count : tx_count_missing)
   {
-    std::cerr << "INCONSISTENCY: " << tx_count_missing
-              << " transactions required by blockchain are missing in tx db store"
-              << std::endl;
+    if (count > 0)
+    {
+      std::cerr << "INCONSISTENCY:"
+                << " Lane " << lane
+                << " is missing " << count
+                << " transactions required by blockchain are missing in tx db store"
+                << std::endl;
+    }
+    ++lane;
   }
   return EXIT_SUCCESS;
 }
