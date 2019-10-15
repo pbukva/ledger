@@ -37,20 +37,6 @@
 #include <vector>
 
 namespace fetch {
-
-//namespace variant {
-//class Variant;
-//}
-//
-//namespace serializers {
-//template <typename D>
-//using VariantMapSerializer = struct MapSerializer<variant::Variant, D>;
-//
-//template <typename D>
-//using VariantForwardSerializer = struct ForwardSerializer<variant::Variant, D>;
-//
-//}
-
 namespace variant {
 
 /**
@@ -638,7 +624,6 @@ public:
       for (std::size_t i{0}; i < sz; ++i)
       {
         Serialize(serializer, var[i]);
-        //serializer << var[i];
       }
       return;
     }
@@ -649,7 +634,6 @@ public:
       var.IterateObject([&serializer](auto const &key, auto const& value) {
         serializer << key;
         Serialize(serializer, value);
-        //serializer << value;
         return true;
       });
       return;
@@ -719,7 +703,6 @@ public:
       {
         Type v;
         Deserialize(deserializer, var[i]);
-        //deserializer >> var[i];
       }
       return;
     }
@@ -736,7 +719,6 @@ public:
         byte_array::ConstByteArray k;
         deserializer >> k;
         Deserialize(deserializer, v);
-        //deserializer >> v;
         var[k] = std::move(v);
       }
       return;
