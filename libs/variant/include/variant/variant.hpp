@@ -638,6 +638,7 @@ public:
       for (std::size_t i{0}; i < sz; ++i)
       {
         Serialize(serializer, var[i]);
+        //serializer << var[i];
       }
       return;
     }
@@ -648,6 +649,7 @@ public:
       var.IterateObject([&serializer](auto const &key, auto const& value) {
         serializer << key;
         Serialize(serializer, value);
+        //serializer << value;
         return true;
       });
       return;
@@ -701,9 +703,9 @@ public:
     }
     case Type::Type::STRING:
     {
-      std::string val;
+      byte_array::ConstByteArray val;
       deserializer >> val;
-      var = val;
+      var = Type{std::move(val)};
       return;
     }
     case Type::Type::ARRAY:
@@ -717,6 +719,7 @@ public:
       {
         Type v;
         Deserialize(deserializer, var[i]);
+        //deserializer >> var[i];
       }
       return;
     }
@@ -733,11 +736,13 @@ public:
         byte_array::ConstByteArray k;
         deserializer >> k;
         Deserialize(deserializer, v);
-        var[k] = v;
+        //deserializer >> v;
+        var[k] = std::move(v);
       }
       return;
     }
     }
+
     throw std::runtime_error{"Variant has unknown type."};
   }
 };
