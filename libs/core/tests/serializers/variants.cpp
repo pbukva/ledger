@@ -57,7 +57,7 @@ TEST(MsgPacker, VariantInt)
 
   {
     MsgPackSerializer stream;
-    Variant               i1, i2;
+    Variant           i1, i2;
 
     i1     = 123456;
     stream = MsgPackSerializer();
@@ -72,7 +72,7 @@ TEST(MsgPacker, VariantFloat)
 {
   {
     MsgPackSerializer stream;
-    Variant               fp1, fp2;
+    Variant           fp1, fp2;
 
     fp1    = 1.25;  // should be repn exactly.
     stream = MsgPackSerializer();
@@ -87,7 +87,7 @@ TEST(MsgPacker, VariantString)
 {
   {
     MsgPackSerializer stream;
-    Variant               s1, s2;
+    Variant           s1, s2;
 
     s1     = "123456";
     stream = MsgPackSerializer();
@@ -102,7 +102,7 @@ TEST(MsgPacker, VariantNull)
 {
   {
     MsgPackSerializer stream;
-    Variant               null1, null2;
+    Variant           null1, null2;
 
     null1  = Variant::Null();
     stream = MsgPackSerializer();
@@ -117,14 +117,14 @@ TEST(MsgPacker, VariantArray)
 {
   {
     MsgPackSerializer stream;
-    Variant               arr1, arr2;
+    Variant           arr1, arr2;
 
-    arr1 = Variant::Array(4);
+    arr1    = Variant::Array(4);
     arr1[0] = Variant::Null();
     arr1[1] = 123456;
     arr1[2] = 1.25;
     arr1[3] = "123456";
-    stream = MsgPackSerializer();
+    stream  = MsgPackSerializer();
     stream << arr1;
     stream.seek(0);
     stream >> arr2;
@@ -141,9 +141,9 @@ TEST(MsgPacker, VariantArrayOfArray)
 
   {
     MsgPackSerializer stream;
-    Variant               arr1, arr2;
+    Variant           arr1, arr2;
 
-    arr1 = Variant::Array(4);
+    arr1    = Variant::Array(4);
     arr1[0] = Variant::Array(4);
     arr1[1] = Variant::Array(4);
     arr1[2] = Variant::Array(4);
@@ -157,7 +157,7 @@ TEST(MsgPacker, VariantArrayOfArray)
       }
     }
 
-    stream             = MsgPackSerializer();
+    stream = MsgPackSerializer();
     stream << arr1;
     stream.seek(0);
     stream >> arr2;
@@ -178,7 +178,7 @@ TEST(MsgPacker, VariantObject)
 {
   {
     MsgPackSerializer stream;
-    Variant               obj1, obj2;
+    Variant           obj1, obj2;
 
     obj1 = Variant::Object();
 
@@ -196,41 +196,40 @@ TEST(MsgPacker, VariantObject)
   }
 }
 
-
 constexpr std::size_t VariantTypeSize()
 {
   using Type = Variant::Type;
-  std::size_t size{0};
+  std::size_t    size{0};
   constexpr auto first = Type::UNDEFINED;
   switch (first)
   {
-    case first:
-      ++size;
-      /* FALLTHRU */
-    case Type::INTEGER:
-      ++size;
-      /* FALLTHRU */
-    case Type::FLOATING_POINT:
-      ++size;
-      /* FALLTHRU */
-    case Type::FIXED_POINT:
-      ++size;
-      /* FALLTHRU */
-    case Type::BOOLEAN:
-      ++size;
-      /* FALLTHRU */
-    case Type::STRING:
-      ++size;
-      /* FALLTHRU */
-    case Type::NULL_VALUE:
-      ++size;
-      /* FALLTHRU */
-    case Type::ARRAY:
-      ++size;
-      /* FALLTHRU */
-    case Type::OBJECT:
-      ++size;
-      /* FALLTHRU */
+  case first:
+    ++size;
+    /* FALLTHRU */
+  case Type::INTEGER:
+    ++size;
+    /* FALLTHRU */
+  case Type::FLOATING_POINT:
+    ++size;
+    /* FALLTHRU */
+  case Type::FIXED_POINT:
+    ++size;
+    /* FALLTHRU */
+  case Type::BOOLEAN:
+    ++size;
+    /* FALLTHRU */
+  case Type::STRING:
+    ++size;
+    /* FALLTHRU */
+  case Type::NULL_VALUE:
+    ++size;
+    /* FALLTHRU */
+  case Type::ARRAY:
+    ++size;
+    /* FALLTHRU */
+  case Type::OBJECT:
+    ++size;
+    /* FALLTHRU */
   }
   return size;
 }
@@ -239,67 +238,63 @@ constexpr Variant::Type IndexToVariantType(std::size_t i)
 {
   using Type = Variant::Type;
   static_assert(VariantTypeSize() == static_cast<std::size_t>(Type::OBJECT) + 1ull,
-    "Something is wrong with conversion from integer to Variant::Type enumeration");
+                "Something is wrong with conversion from integer to Variant::Type enumeration");
   return static_cast<Type>(i % VariantTypeSize());
 }
 
-
-Variant CreateVariant( std::size_t remaining_nest_level, Variant::Type type = Variant::Type::OBJECT)
+Variant CreateVariant(std::size_t remaining_nest_level, Variant::Type type = Variant::Type::OBJECT)
 {
   using Type = Variant::Type;
 
   type = remaining_nest_level > 0 ? type : Type::STRING;
-  auto const index {static_cast<std::size_t>(type)};
+  auto const index{static_cast<std::size_t>(type)};
 
   switch (type)
   {
-    case Type::UNDEFINED:
-      return Variant::Undefined();
-    case Type::NULL_VALUE:
-      return Variant::Null();
-    case Type::INTEGER:
-      return Variant{index};
-    case Type::FLOATING_POINT:
-      return Variant{static_cast<double>(index)};
-    case Type::FIXED_POINT:
-      return Variant{Variant::FixedPointRepr(index)};
-    case Type::BOOLEAN:
-      return Variant{index % 2 > 0};
-    case Type::STRING:
-      return Variant{std::to_string(index)};
-    case Type::ARRAY:
+  case Type::UNDEFINED:
+    return Variant::Undefined();
+  case Type::NULL_VALUE:
+    return Variant::Null();
+  case Type::INTEGER:
+    return Variant{index};
+  case Type::FLOATING_POINT:
+    return Variant{static_cast<double>(index)};
+  case Type::FIXED_POINT:
+    return Variant{Variant::FixedPointRepr(index)};
+  case Type::BOOLEAN:
+    return Variant{index % 2 > 0};
+  case Type::STRING:
+    return Variant{std::to_string(index)};
+  case Type::ARRAY:
+  {
+    auto arr{Variant::Array(VariantTypeSize())};
+    for (std::size_t i{0}; i < arr.size(); ++i)
     {
-      auto arr {Variant::Array(VariantTypeSize())};
-      for (std::size_t i{0}; i < arr.size(); ++i)
-      {
-        arr[i] = CreateVariant(remaining_nest_level - 1, IndexToVariantType(i));
-      }
-      return arr;
+      arr[i] = CreateVariant(remaining_nest_level - 1, IndexToVariantType(i));
     }
-    case Type::OBJECT:
+    return arr;
+  }
+  case Type::OBJECT:
+  {
+    auto obj{Variant::Object()};
+    for (std::size_t i{0}; i < VariantTypeSize(); ++i)
     {
-      auto obj {Variant::Object()};
-      for (std::size_t i{0}; i < VariantTypeSize(); ++i)
-      {
-        obj[std::to_string(i)] = CreateVariant(remaining_nest_level - 1, IndexToVariantType(i));
-      }
-      return obj;
+      obj[std::to_string(i)] = CreateVariant(remaining_nest_level - 1, IndexToVariantType(i));
     }
+    return obj;
+  }
   }
 
   return Variant{};
 }
 
-
 TEST(MsgPacker, ComplexVariant)
 {
   {
     MsgPackSerializer stream;
-    Variant               obj1, obj2;
+    Variant           obj1, obj2;
 
     obj1 = CreateVariant(6ull, Variant::Type::OBJECT);
-
-    std::cout << obj1 << std::endl;
 
     stream = MsgPackSerializer();
     stream << obj1;
@@ -313,4 +308,4 @@ TEST(MsgPacker, ComplexVariant)
   }
 }
 
-}
+}  // namespace

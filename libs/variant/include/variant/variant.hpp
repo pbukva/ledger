@@ -55,10 +55,10 @@ namespace variant {
 class Variant
 {
 public:
-  using ConstByteArray = byte_array::ConstByteArray;
-  using IntegerRepr = int64_t;
+  using ConstByteArray    = byte_array::ConstByteArray;
+  using IntegerRepr       = int64_t;
   using FloatingPointRepr = double;
-  using FixedPointRepr = fixed_point::fp64_t;
+  using FixedPointRepr    = fixed_point::fp64_t;
 
   enum class Type
   {
@@ -197,9 +197,9 @@ private:
 
   union PrimitiveData
   {
-    IntegerRepr integer;
-    FloatingPointRepr  float_point;
-    bool    boolean;
+    IntegerRepr       integer;
+    FloatingPointRepr float_point;
+    bool              boolean;
   };
 
   // Data Elements
@@ -631,7 +631,7 @@ public:
     {
       auto sz = static_cast<uint32_t>(var.size());
       serializer << sz;
-      var.IterateObject([&serializer](auto const &key, auto const& value) {
+      var.IterateObject([&serializer](auto const &key, auto const &value) {
         serializer << key;
         Serialize(serializer, value);
         return true;
@@ -698,7 +698,7 @@ public:
       std::size_t count;
       deserializer >> count_tmp;
       count = count_tmp;
-      var = Type::Array(count);
+      var   = Type::Array(count);
       for (std::size_t i = 0; i < count; i++)
       {
         Type v;
@@ -712,14 +712,12 @@ public:
       std::size_t count;
       deserializer >> count_tmp;
       count = count_tmp;
-      var = Type::Object();
+      var   = Type::Object();
       for (std::size_t i = 0; i < count; i++)
       {
-        Type                       v;
         byte_array::ConstByteArray k;
         deserializer >> k;
-        Deserialize(deserializer, v);
-        var[k] = std::move(v);
+        Deserialize(deserializer, var[k]);
       }
       return;
     }
